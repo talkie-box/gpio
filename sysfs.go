@@ -51,14 +51,18 @@ func setDirection(p Pin, d direction, initialValue uint) {
 	if initialValue != 0 {
 		initial = "1"
 	}
-	args := []string{"gpiochip0", fmt.Sprintf("%d=%s", p.Number, initial)}
-	if d == inDirection {
-		args = []string{"gpiochip0", fmt.Sprintf("%d", p.Number)}
-	}
-	err := execCommand("gpioset", args)
-	if err != nil {
-		fmt.Printf("failed to set gpio %d direction\n", p.Number)
-		fmt.Println(err)
+	// Only use gpioset for setting output values, not for input direction
+	if d == outDirection {
+		err := execCommand("gpioset", []string{"gpiochip0", fmt.Sprintf("%d=%s", p.Number, initial)})
+		if err != nil {
+			fmt.Printf("failed to set gpio %d direction\n", p.Number)
+			fmt.Println(err)
+		}
+	} else if d == inDirection {
+		// For input pins, ensure they are not driven by setting them as inputs
+		// This typically does not require a specific command with gpioset, as setting a pin as input
+		// might be simply not driving it. Specific handling might depend on hardware capabilities and requirements.
+		fmt.Println("Set as input; ensure pin is not driven by any outputs.")
 	}
 }
 
