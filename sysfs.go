@@ -2,7 +2,7 @@ package gpio
 
 import (
 	"fmt"
-	"os"
+	"os/exec"
 	"strconv"
 	"time"
 )
@@ -23,123 +23,83 @@ const (
 	edgeBoth
 )
 
+// Helper function to execute a shell command
+func execCommand(command string, args []string) error {
+	cmd := exec.Command(command, args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("command execution failed: %w", err)
+	}
+	return nil
+}
+
+// exportGPIO uses 'gpioset' to configure a pin as an output initially
 func exportGPIO(p Pin) {
-	export, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0660)
+	err := execCommand("gpiofind", []string{strconv.Itoa(int(p.Number))})
 	if err != nil {
-		fmt.Printf("failed to open gpio export file for writing\n")
+		fmt.Printf("failed to find gpio %d\n", p.Number)
 		fmt.Println(err)
-		//os.Exit(1)
 		return
 	}
-	defer export.Close()
-	export.Write([]byte(strconv.Itoa(int(p.Number))))
-
+	// Small delay to ensure settings are applied
 	time.Sleep(100 * time.Millisecond)
 }
 
-func unexportGPIO(p Pin) {
-	export, err := os.OpenFile("/sys/class/gpio/unexport", os.O_WRONLY, 0660)
-	if err != nil {
-		fmt.Printf("failed to open gpio unexport file for writing\n")
-		fmt.Println(err)
-		//os.Exit(1)
-		return
-	}
-	defer export.Close()
-	export.Write([]byte(strconv.Itoa(int(p.Number))))
-}
-
+// setDirection sets the direction and initial value of the GPIO
 func setDirection(p Pin, d direction, initialValue uint) {
-	dir, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/direction", p.Number), os.O_WRONLY, 0660)
-	if err != nil {
-		fmt.Printf("failed to open gpio %d direction file for writing\n", p.Number)
-		fmt.Println(err)
-		//os.Exit(1)
-		return
+	initial := "0"
+	if initialValue != 0 {
+		initial = "1"
 	}
-	defer dir.Close()
-
-	switch {
-	case d == inDirection:
-		dir.Write([]byte("in"))
-	case d == outDirection && initialValue == 0:
-		dir.Write([]byte("low"))
-	case d == outDirection && initialValue == 1:
-		dir.Write([]byte("high"))
-	default:
-		panic(fmt.Sprintf("setDirection called with invalid direction or initialValue, %d, %d", d, initialValue))
+	args := []string{"gpiochip0", fmt.Sprintf("%d=%s", p.Number, initial)}
+	if d == inDirection {
+		args = []string{"gpiochip0", fmt.Sprintf("%d", p.Number)}
+	}
+	err := execCommand("gpioset", args)
+	if err != nil {
+		fmt.Printf("failed to set gpio %d direction\n", p.Number)
+		fmt.Println(err)
 	}
 }
 
+// setEdgeTrigger configures edge detection settings for GPIO interrupts
 func setEdgeTrigger(p Pin, e edge) {
-	edge, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/edge", p.Number), os.O_WRONLY, 0660)
-	if err != nil {
-		fmt.Printf("failed to open gpio %d edge file for writing\n", p.Number)
-		fmt.Println(err)
-		//os.Exit(1)
-		return
-	}
-	defer edge.Close()
-
+	edge := "none"
 	switch e {
-	case edgeNone:
-		edge.Write([]byte("none"))
 	case edgeRising:
-		edge.Write([]byte("rising"))
+		edge = "rising"
 	case edgeFalling:
-		edge.Write([]byte("falling"))
+		edge = "falling"
 	case edgeBoth:
-		edge.Write([]byte("both"))
-	default:
-		panic(fmt.Sprintf("setEdgeTrigger called with invalid edge %d", e))
+		edge = "both"
+	}
+	err := execCommand("gpioget", []string{"gpiochip0", fmt.Sprintf("%d=%s", p.Number, edge)})
+	if err != nil {
+		fmt.Printf("failed to set gpio %d edge detection\n", p.Number)
+		fmt.Println(err)
 	}
 }
 
 func openPin(p Pin, write bool) Pin {
-	flags := os.O_RDONLY
-	if write {
-		flags = os.O_RDWR
-	}
-	f, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", p.Number), flags, 0660)
-	if err != nil {
-		fmt.Printf("failed to open gpio %d value file for reading\n", p.Number)
-		fmt.Println(err)
-		//os.Exit(1)
-		return p
-	}
-	p.f = f
+	// No file needs to be opened with the gpiod approach
 	return p
 }
 
 func readPin(p Pin) (val uint, err error) {
-	file := p.f
-	file.Seek(0, 0)
-	buf := make([]byte, 1)
-	_, err = file.Read(buf)
+	cmd := exec.Command("gpioget", "gpiochip0", strconv.Itoa(int(p.Number)))
+	output, err := cmd.Output()
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to read gpio: %w", err)
 	}
-	c := buf[0]
-	switch c {
-	case '0':
-		return 0, nil
-	case '1':
+	if len(output) > 0 && output[0] == '1' {
 		return 1, nil
-	default:
-		return 0, fmt.Errorf("read inconsistent value in pinfile, %c", c)
 	}
+	return 0, nil
 }
 
 func writePin(p Pin, v uint) error {
-	var buf []byte
-	switch v {
-	case 0:
-		buf = []byte{'0'}
-	case 1:
-		buf = []byte{'1'}
-	default:
-		return fmt.Errorf("invalid output value %d", v)
+	value := "0"
+	if v == 1 {
+		value = "1"
 	}
-	_, err := p.f.Write(buf)
-	return err
+	return execCommand("gpioset", []string{"gpiochip0", fmt.Sprintf("%d=%s", p.Number, value)})
 }
