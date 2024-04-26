@@ -34,7 +34,8 @@ func execCommand(command string, args []string) error {
 
 // exportGPIO uses 'gpioset' to configure a pin as an output initially
 func exportGPIO(p Pin) {
-	err := execCommand("gpiofind", []string{strconv.Itoa(int(p.Number))})
+	formattedPinNumber := fmt.Sprintf("GPIO%d", p.Number)
+	err := execCommand("gpiofind", []string{formattedPinNumber})
 	if err != nil {
 		fmt.Printf("failed to find gpio %d\n", p.Number)
 		fmt.Println(err)
