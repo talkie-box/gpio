@@ -27,6 +27,7 @@ func exportGPIO(p Pin) {
 	export, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0660)
 	if err != nil {
 		fmt.Printf("failed to open gpio export file for writing\n")
+		fmt.Println(err)
 		//os.Exit(1)
 		return
 	}
@@ -40,6 +41,7 @@ func unexportGPIO(p Pin) {
 	export, err := os.OpenFile("/sys/class/gpio/unexport", os.O_WRONLY, 0660)
 	if err != nil {
 		fmt.Printf("failed to open gpio unexport file for writing\n")
+		fmt.Println(err)
 		//os.Exit(1)
 		return
 	}
@@ -51,6 +53,7 @@ func setDirection(p Pin, d direction, initialValue uint) {
 	dir, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/direction", p.Number), os.O_WRONLY, 0660)
 	if err != nil {
 		fmt.Printf("failed to open gpio %d direction file for writing\n", p.Number)
+		fmt.Println(err)
 		//os.Exit(1)
 		return
 	}
@@ -72,6 +75,7 @@ func setEdgeTrigger(p Pin, e edge) {
 	edge, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/edge", p.Number), os.O_WRONLY, 0660)
 	if err != nil {
 		fmt.Printf("failed to open gpio %d edge file for writing\n", p.Number)
+		fmt.Println(err)
 		//os.Exit(1)
 		return
 	}
@@ -99,6 +103,7 @@ func openPin(p Pin, write bool) Pin {
 	f, err := os.OpenFile(fmt.Sprintf("/sys/class/gpio/gpio%d/value", p.Number), flags, 0660)
 	if err != nil {
 		fmt.Printf("failed to open gpio %d value file for reading\n", p.Number)
+		fmt.Println(err)
 		//os.Exit(1)
 		return p
 	}
